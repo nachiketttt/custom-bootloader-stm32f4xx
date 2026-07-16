@@ -16,14 +16,12 @@ Built while following the [STM32Fx Microcontroller Custom Bootloader Development
 
 | UART | Role | Connected via |
 |---|---|---|
-| **USART2** (`C_UART`) | Binary command/response protocol it talks to `STM32_Programmer_V1.py` | ST-LINK Virtual COM Port (`/dev/ttyACM0`) |
-| **USART3** (`D_UART`) | Human-readable debug logging (`printmsg`) | External USB-TTL adapter |
+| **USART2** (C_UART) | Binary command/response protocol it talks to STM32_Programmer_V1.py | ST-LINK Virtual COM Port (`/dev/ttyACM0`) |
+| **USART3** (D_UART) | Human-readable debug logging (`printmsg`) | External USB-TTL adapter |
 
 Keeping these on separate physical UARTs means the debug text never corrupts the binary protocol stream, and you can watch the debug console (e.g. moserial) live while the Python tool talks to the board.
 
-![Wiring / setup screenshot here]()
-
----
+![connections](img/connections.jpg)
 
 ## Memory map (Nucleo-F446RE, 512K flash)
 
@@ -31,8 +29,8 @@ The bootloader and the user app are **two separate STM32CubeIDE projects**, each
 
 | Region | Address range | Size | Used by |
 |---|---|---|---|
-| Bootloader | `0x08000000` – `0x08007FFF` | 32K (Sectors 0–1) | `Custom_Bootloader` project |
-| User app | `0x08008000` – `0x0807FFFF` | 480K (Sectors 2–7) | `User_app` project |
+| Bootloader | 0x08000000 – 0x08007FFF | 32K (Sectors 0–1) | `Custom_Bootloader` project |
+| User app | 0x08008000 – 0x0807FFFF | 480K (Sectors 2–7) | `User_app` project |
 
 `FLASH_SECTOR2_BASE_ADDR = 0x08008000U` in `main.c` (bootloader) must always match the user app's `FLASH.ld` origin, that's the address the bootloader reads the app's MSP and reset handler from before jumping to it.
 
@@ -42,14 +40,14 @@ Unlike the RAM, the F446RE's flash sectors are **not** uniform size and this mat
 
 | Sector | Size | Address range |
 |---|---|---|
-| 0 | 16K | `0x08000000` – `0x08003FFF` |
-| 1 | 16K | `0x08004000` – `0x08007FFF` |
-| 2 | 16K | `0x08008000` – `0x0800BFFF` |
-| 3 | 16K | `0x0800C000` – `0x0800FFFF` |
-| 4 | 64K | `0x08010000` – `0x0801FFFF` |
-| 5 | 128K | `0x08020000` – `0x0803FFFF` |
-| 6 | 128K | `0x08040000` – `0x0805FFFF` |
-| 7 | 128K | `0x08060000` – `0x0807FFFF` |
+| 0 | 16K | 0x08000000 – 0x08003FFF |
+| 1 | 16K | 0x08004000 – 0x08007FFF |
+| 2 | 16K | 0x08008000 – 0x0800BFFF |
+| 3 | 16K | 0x0800C000 – 0x0800FFFF |
+| 4 | 64K | 0x08010000 – 0x0801FFFF |
+| 5 | 128K | 0x08020000 – 0x0803FFFF |
+| 6 | 128K | 0x08040000 – 0x0805FFFF |
+| 7 | 128K | 0x08060000 – 0x0807FFFF |
 
 Sectors 0 and 1 hold the bootloader
 
@@ -86,9 +84,8 @@ MEMORY
    ```
    Enter the port name for USART2 (e.g. `/dev/ttyACM0`) when prompted, then pick a command from the menu.
 
-![Debug terminal screenshot here]()
+![moserial](img/bootloader_to_main.png)
 
-![Python tool menu screenshot here]()
 
 
 ## Command protocol
@@ -107,23 +104,20 @@ Reply format:
 
 | # | Command | Code (host) | Packet length | Description | Status |
 |---|---|---|---|---|---|
-| 1 | `BL_GET_VER` | `0x51` | 6 | Reads the bootloader version | ✅ Implemented |
-| 2 | `BL_GET_HELP` | `0x52` | 6 | Lists all supported command codes | 🚧 Stub |
-| 3 | `BL_GET_CID` | `0x53` | 6 | Reads the MCU chip ID | 🚧 Stub |
-| 4 | `BL_GET_RDP_STATUS` | `0x54` | 6 | Reads flash Read-Protection (RDP) level | 🚧 Stub |
-| 5 | `BL_GO_TO_ADDR` | `0x55` | 10 | Jumps execution to a given address | 🚧 Stub |
-| 6 | `BL_FLASH_MASS_ERASE` | -- | -- | Erases all flash sectors | 🚧 Stub |
-| 7 | `BL_FLASH_ERASE` | `0x56` | 8 | Erases one or more flash sectors | 🚧 Stub |
-| 8 | `BL_MEM_WRITE` | `0x57` | 11 | Writes data to flash | 🚧 Stub |
-| 9 | `BL_EN_R_W_PROTECT` | `0x58` | 8 | Enables read/write protection on sectors | 🚧 Stub |
-| 10 | `BL_MEM_READ` | `0x59` | -- | Reads memory contents | 🚧 Stub (not supported in host tool) |
-| 11 | `BL_READ_SECTOR_P_STATUS` | `0x5A` | 6 | Reads sector protection status | 🚧 Stub |
-| 12 | `BL_OTP_READ` | `0x5B` | -- | Reads One-Time-Programmable memory | 🚧 Stub (not supported in host tool) |
-| 13 | `BL_DIS_R_W_PROTECT` | `0x5C` | 6 | Disables read/write protection | 🚧 Stub |
-| 14 | `BL_MY_NEW_COMMAND` | `0x5D` | 8 | Placeholder for a custom command | 🚧 Stub |
-
-See [`Custom_Bootloader/COMMANDS.md`](Custom_Bootloader/COMMANDS.md) for a per-command reference with screenshots.
-
+| 1 | BL_GET_VER | 0x51 | 6 | Reads the bootloader version | ✅ Implemented |
+| 2 | BL_GET_HELP | 0x52 | 6 | Lists all supported command codes | 🚧 Stub |
+| 3 | BL_GET_CID | 0x53 | 6 | Reads the MCU chip ID | 🚧 Stub |
+| 4 | BL_GET_RDP_STATUS | 0x54 | 6 | Reads flash Read-Protection (RDP) level | 🚧 Stub |
+| 5 | BL_GO_TO_ADDR | 0x55 | 10 | Jumps execution to a given address | 🚧 Stub |
+| 6 | BL_FLASH_MASS_ERASE | -- | -- | Erases all flash sectors | 🚧 Stub |
+| 7 | BL_FLASH_ERASE | 0x56 | 8 | Erases one or more flash sectors | 🚧 Stub |
+| 8 | BL_MEM_WRITE | 0x57 | 11 | Writes data to flash | 🚧 Stub |
+| 9 | BL_EN_R_W_PROTECT | 0x58 | 8 | Enables read/write protection on sectors | 🚧 Stub |
+| 10 | BL_MEM_READ | 0x59 | -- | Reads memory contents | 🚧 Stub (not supported in host tool) |
+| 11 | BL_READ_SECTOR_P_STATUS | 0x5A | 6 | Reads sector protection status | 🚧 Stub |
+| 12 | BL_OTP_READ | 0x5B | -- | Reads One-Time-Programmable memory | 🚧 Stub (not supported in host tool) |
+| 13 | BL_DIS_R_W_PROTECT | 0x5C | 6 | Disables read/write protection | 🚧 Stub |
+| 14 | BL_MY_NEW_COMMAND | 0x5D | 8 | Placeholder for a custom command | 🚧 Stub |
 
 ## Project structure
 
