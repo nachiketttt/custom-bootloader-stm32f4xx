@@ -1,0 +1,40 @@
+# STM32CubeIDE build output
+Debug/
+Release/
+Binaries/
+
+# STM32CubeIDE project/workspace junk
+.metadata/
+.settings/
+*.launch.bak
+
+# STM32CubeMX generated backup
+*.ioc.bak
+
+# Object/binary files
+*.o
+*.obj
+*.elf
+*.bin
+*.hex
+*.map
+*.list
+*.su
+*.d
+*.d.bak
+
+# User app image used by the Python flashing tool
+user_app.bin
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Editor/OS junk
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
