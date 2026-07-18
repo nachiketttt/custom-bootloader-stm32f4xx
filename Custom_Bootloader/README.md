@@ -19,6 +19,8 @@ Per-command details and captured host/target output for the custom bootloader pr
 
 ### GO_TO_ADDR
 
+![output](../img/go_addr.png)
+
 ### FLASH_MASS_ERASE
 
 ### FLASH_ERASE

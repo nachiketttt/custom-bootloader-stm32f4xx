@@ -42,7 +42,8 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
+#define ADDR_VALID		1
+#define ADDR_INVALID	0
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -101,6 +102,7 @@ uint8_t get_bootloader_version(void);
 void bootloader_uart_write_data(uint8_t* pBuffer, uint32_t len);
 uint32_t get_mcu_chip_id(void);
 uint8_t get_flash_rdp_level(void);
+uint8_t verify_addr(uint32_t go_address);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -593,12 +595,71 @@ void bootloader_handle_getrdp_cmd(uint8_t* bl_rx_buffer)
 		//checksum is wrong sending nack
 		bootloader_send_nack();
 	}
-
 }
 
 void bootloader_handle_go_cmd(uint8_t* bl_rx_buffer)
 {
+	uint32_t go_addr;
+	uint8_t addr_valid=ADDR_VALID;
+	uint8_t addr_invalid=ADDR_INVALID;
 
+	//1. Verify the checksum
+	printmsg("BL_DEBUG_MSG: bootloader_handle_go_cmd\n");
+
+	//total length of command packet
+	//here bl_rx_buffer[0] contains the value of bytes to follow and
+	//1 is added to include the rcv_len byte i.e. 1st byte (bl_rx_buffer[0])
+	uint32_t command_packet_len=bl_rx_buffer[0]+1;
+
+	//extract the crc32 sent by the host
+	//4 is being subtracted here because total len is of 6 bytes and first 2 bytes
+	//are len tto follow and command code the rest of the 4 are crc
+	uint32_t host_crc=*((uint32_t*)(bl_rx_buffer+command_packet_len-4));
+
+	//this funct returns 0 then crc is good if non zero val returned then crc is bad
+	if(!bootloader_verify_crc(&bl_rx_buffer[0],command_packet_len-4,host_crc))
+	{
+		printmsg("BL_DEBUG_MSG: Checksum successful!!\n");
+		bootloader_send_ack(bl_rx_buffer[0],1);
+
+		//extract the go address
+		go_addr=*((uint32_t*)&bl_rx_buffer[1]);
+		printmsg("BL_DEBUG_MSG: GO address is %#x\n",go_addr);
+		if(verify_addr(go_addr)==ADDR_VALID)
+		{
+			//tell host addr is fine
+			bootloader_uart_write_data(&addr_valid,1);
+
+			/*
+		    uint32_t msp_value = *(volatile uint32_t*)go_addr;
+		    __set_MSP(msp_value);
+
+		    uint32_t resethandler_addr = *(volatile uint32_t*)(go_addr + 4);
+		    void(*lets_jump)(void) = (void*)resethandler_addr;
+		    */
+
+		    go_addr+=1; //make T bit =1
+
+		    void (*lets_jump)(void) = (void *)go_addr;
+
+			printmsg("BL_DEBUG_MSG: Jumping to given address..\n");
+
+			//when code jumps to this addr there must be valid executable code there
+			//to see any result so the user must ensure that there is valid code present here
+			lets_jump();
+		}
+		else
+		{
+			printmsg("BL_DEBUG_MSG: INVALID address\n");
+			bootloader_uart_write_data(&addr_invalid,1);
+		}
+	}
+	else
+	{
+		printmsg("BL_DEBUG_MSG: checksum fail!!\n");
+		//checksum is wrong sending nack
+		bootloader_send_nack();
+	}
 }
 
 void bootloader_handle_flash_erase_cmd(uint8_t* bl_rx_buffer)
@@ -697,6 +758,35 @@ uint8_t get_flash_rdp_level(void)
 	rdp_status=(uint8_t)(*pOB_addr>>8);
 
 	return rdp_status;
+}
+
+uint8_t verify_addr(uint32_t go_address)
+{
+	//system mem ===> valid address
+	//sram1 mem ===> valid address
+	//sram2 mem ===> valid address
+	//sram mem ===> valid address
+	//peripheral mem ===> valid address but do NOT allow
+	//external mem ===> valid address
+
+	if(go_address >= SRAM1_BASE && go_address <= (SRAM1_BASE+112*1024))
+	{
+		return ADDR_VALID;
+	}
+	else if(go_address >= SRAM2_BASE && go_address <= (SRAM1_BASE+16*1024))
+	{
+		return ADDR_VALID;
+	}
+	else if(go_address >= FLASH_BASE && go_address <= FLASH_END)
+	{
+		return ADDR_VALID;
+	}
+	else if(go_address >= BKPSRAM_BASE && go_address <= (BKPSRAM_BASE+4*1024))
+	{
+		return ADDR_VALID;
+	}
+	else
+		return ADDR_INVALID;
 }
 /* USER CODE END 4 */
 
