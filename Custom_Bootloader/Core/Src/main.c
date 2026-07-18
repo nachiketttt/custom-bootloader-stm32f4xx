@@ -53,6 +53,21 @@ UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
 uint8_t bl_rx_buffer[BL_RX_LEN];
+
+uint8_t supported_commands[]={
+		BL_GET_VER,
+		BL_GET_HELP,
+		BL_GET_CID,
+		BL_GET_RDP_STATUS,
+		BL_GO_TO_ADDR,
+		BL_FLASH_ERASE,
+		BL_MEM_WRITE,
+		BL_EN_R_W_PROTECT,
+		BL_MEM_READ,
+		BL_READ_SECTOR_STATUS,
+		BL_OTP_READ,
+		BL_DIS_R_W_PROTECT
+};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -84,6 +99,8 @@ void bootloader_send_ack(uint8_t command_code, uint8_t follow_len);
 uint8_t bootloader_verify_crc(uint8_t* pData, uint32_t len, uint32_t crc_host);
 uint8_t get_bootloader_version(void);
 void bootloader_uart_write_data(uint8_t* pBuffer, uint32_t len);
+uint32_t get_mcu_chip_id(void);
+uint8_t get_flash_rdp_level(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -476,18 +493,106 @@ void bootloader_handle_getver_cmd(uint8_t* bl_rx_buffer)
 	}
 }
 
+//bootloader sneds out ALL supported functions
 void bootloader_handle_gethelp_cmd(uint8_t* bl_rx_buffer)
 {
+	//1. Verify the checksum
+	printmsg("BL_DEBUG_MSG: bootloader_handle_gethelp_cmd\n");
 
+	//total length of command packet
+	//here bl_rx_buffer[0] contains the value of bytes to follow and
+	//1 is added to include the rcv_len byte i.e. 1st byte (bl_rx_buffer[0])
+	uint32_t command_packet_len=bl_rx_buffer[0]+1;
+
+	//extract the crc32 sent by the host
+	//4 is being subtracted here because total len is of 6 bytes and first 2 bytes
+	//are len tto follow and command code the rest of the 4 are crc
+	uint32_t host_crc=*((uint32_t*)(bl_rx_buffer+command_packet_len-4));
+
+	//this funct returns 0 then crc is good if non zero val returned then crc is bad
+	if(!bootloader_verify_crc(&bl_rx_buffer[0],command_packet_len-4,host_crc))
+	{
+		printmsg("BL_DEBUG_MSG: Checksum successful!!\n");
+		bootloader_send_ack(bl_rx_buffer[0],sizeof(supported_commands));
+		bootloader_uart_write_data(supported_commands,sizeof(supported_commands));
+	}
+	else
+	{
+		printmsg("BL_DEBUG_MSG: checksum fail!!\n");
+		//checksum is wrong sending nack
+		bootloader_send_nack();
+	}
 }
 
 void bootloader_handle_getcid_cmd(uint8_t* bl_rx_buffer)
 {
+	uint32_t chip_id;
 
+	//1. Verify the checksum
+	printmsg("BL_DEBUG_MSG: bootloader_handle_getcid_cmd\n");
+
+	//total length of command packet
+	//here bl_rx_buffer[0] contains the value of bytes to follow and
+	//1 is added to include the rcv_len byte i.e. 1st byte (bl_rx_buffer[0])
+	uint32_t command_packet_len=bl_rx_buffer[0]+1;
+
+	//extract the crc32 sent by the host
+	//4 is being subtracted here because total len is of 6 bytes and first 2 bytes
+	//are len tto follow and command code the rest of the 4 are crc
+	uint32_t host_crc=*((uint32_t*)(bl_rx_buffer+command_packet_len-4));
+
+	//this funct returns 0 then crc is good if non zero val returned then crc is bad
+	if(!bootloader_verify_crc(&bl_rx_buffer[0],command_packet_len-4,host_crc))
+	{
+		printmsg("BL_DEBUG_MSG: Checksum successful!!\n");
+		bootloader_send_ack(bl_rx_buffer[0],2);
+		chip_id=get_mcu_chip_id();
+		uint16_t dev_id = (uint16_t)(chip_id & 0xFFF);
+		printmsg("BL_DEBUG_MSG: Chip ID is %#x\n",(chip_id&0xFFF));
+		uint16_t chip_rev=(chip_id>>16)&0xFFFF;
+		printmsg("BL_DEBUG_MSG: Chip REV is %#x\n",chip_rev);
+		bootloader_uart_write_data((uint8_t*)&dev_id,2);
+	}
+	else
+	{
+		printmsg("BL_DEBUG_MSG: checksum fail!!\n");
+		//checksum is wrong sending nack
+		bootloader_send_nack();
+	}
 }
 
 void bootloader_handle_getrdp_cmd(uint8_t* bl_rx_buffer)
 {
+	uint8_t rdp_level;
+
+	//1. Verify the checksum
+	printmsg("BL_DEBUG_MSG: bootloader_handle_getrdp_cmd\n");
+
+	//total length of command packet
+	//here bl_rx_buffer[0] contains the value of bytes to follow and
+	//1 is added to include the rcv_len byte i.e. 1st byte (bl_rx_buffer[0])
+	uint32_t command_packet_len=bl_rx_buffer[0]+1;
+
+	//extract the crc32 sent by the host
+	//4 is being subtracted here because total len is of 6 bytes and first 2 bytes
+	//are len tto follow and command code the rest of the 4 are crc
+	uint32_t host_crc=*((uint32_t*)(bl_rx_buffer+command_packet_len-4));
+
+	//this funct returns 0 then crc is good if non zero val returned then crc is bad
+	if(!bootloader_verify_crc(&bl_rx_buffer[0],command_packet_len-4,host_crc))
+	{
+		printmsg("BL_DEBUG_MSG: Checksum successful!!\n");
+		bootloader_send_ack(bl_rx_buffer[0],1);
+		rdp_level=get_flash_rdp_level();
+		printmsg("BL_DEBUG_MSG: RDP level is %#x\n",rdp_level);
+		bootloader_uart_write_data(&rdp_level,1);
+	}
+	else
+	{
+		printmsg("BL_DEBUG_MSG: checksum fail!!\n");
+		//checksum is wrong sending nack
+		bootloader_send_nack();
+	}
 
 }
 
@@ -573,6 +678,25 @@ uint8_t get_bootloader_version(void)
 void bootloader_uart_write_data(uint8_t* pBuffer, uint32_t len)
 {
 	HAL_UART_Transmit(C_UART, pBuffer, len, HAL_MAX_DELAY);
+}
+
+uint32_t get_mcu_chip_id(void)
+{
+	/*The STM32F446xx MCUs integrate an MCU ID code. This ID identifies the ST MCU part-
+	number and the die revision. It is part of the DBG_MCU component and is mapped on the
+	external PPB bus (see Section 33.16 on page 1292 ref manual).*/
+	uint32_t cid;
+	cid=(uint32_t)(DBGMCU->IDCODE);
+	return cid;
+}
+
+uint8_t get_flash_rdp_level(void)
+{
+	uint8_t rdp_status=0;
+	volatile uint32_t* pOB_addr=(uint32_t*)0x1FFFC000;
+	rdp_status=(uint8_t)(*pOB_addr>>8);
+
+	return rdp_status;
 }
 /* USER CODE END 4 */
 
