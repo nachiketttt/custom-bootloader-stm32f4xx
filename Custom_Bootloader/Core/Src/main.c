@@ -44,6 +44,8 @@
 /* USER CODE BEGIN PM */
 #define ADDR_VALID		1
 #define ADDR_INVALID	0
+
+#define INVALID_SECTOR	0
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -103,6 +105,7 @@ void bootloader_uart_write_data(uint8_t* pBuffer, uint32_t len);
 uint32_t get_mcu_chip_id(void);
 uint8_t get_flash_rdp_level(void);
 uint8_t verify_addr(uint32_t go_address);
+uint8_t execute_flash_erase(uint8_t sector_number, uint8_t number_of_sector);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -664,6 +667,40 @@ void bootloader_handle_go_cmd(uint8_t* bl_rx_buffer)
 
 void bootloader_handle_flash_erase_cmd(uint8_t* bl_rx_buffer)
 {
+	uint8_t erase_status=0x00;
+	printmsg("BL_DEBUG_MSG: bootloader_handle_flash_erase_cmd\n");
+
+	//total length of command packet
+	//here bl_rx_buffer[0] contains the value of bytes to follow and
+	//1 is added to include the rcv_len byte i.e. 1st byte (bl_rx_buffer[0])
+	uint32_t command_packet_len=bl_rx_buffer[0]+1;
+
+	//extract the crc32 sent by the host
+	//4 is being subtracted here because total len is of 6 bytes and first 2 bytes
+	//are len tto follow and command code the rest of the 4 are crc
+	uint32_t host_crc=*((uint32_t*)(bl_rx_buffer+command_packet_len-4));
+
+	//this funct returns 0 then crc is good if non zero val returned then crc is bad
+	if(!bootloader_verify_crc(&bl_rx_buffer[0],command_packet_len-4,host_crc))
+	{
+		printmsg("BL_DEBUG_MSG: Checksum successful!!\n");
+		bootloader_send_ack(bl_rx_buffer[0],1);
+		printmsg("BL_DEBUG_MSG: initial_sector: %d no_ofsectors: %d\n",bl_rx_buffer[1],bl_rx_buffer[2]);
+
+		HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, 1);
+		erase_status=execute_flash_erase(bl_rx_buffer[1],bl_rx_buffer[2]);
+		HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, 0);
+
+		printmsg("BL_DEBUG_MSG: Flash erase status: %#x\n",erase_status);
+
+		bootloader_uart_write_data(&erase_status, 1);
+	}
+	else
+	{
+		printmsg("BL_DEBUG_MSG: checksum fail!!\n");
+		//checksum is wrong sending nack
+		bootloader_send_nack();
+	}
 
 }
 
@@ -787,6 +824,45 @@ uint8_t verify_addr(uint32_t go_address)
 	}
 	else
 		return ADDR_INVALID;
+}
+
+uint8_t execute_flash_erase(uint8_t sector_number, uint8_t number_of_sector)
+{
+	//total 8 sectors on nucleo f446re (0 to 7)
+	//if sector_number=0xff, then mass erase is initiated
+	FLASH_EraseInitTypeDef flashErase_handle;
+	uint32_t sectorError;
+	HAL_StatusTypeDef status;
+
+	if(number_of_sector>8)
+		return INVALID_SECTOR;
+
+	if((sector_number == 0xff) || (sector_number<=7))
+	{
+		if(sector_number == (uint8_t) 0xff)
+		{
+			flashErase_handle.TypeErase=FLASH_TYPEERASE_MASSERASE;
+		}else{
+			uint8_t remaining_sector=8-sector_number;
+			if(number_of_sector>remaining_sector)
+			{
+				number_of_sector=remaining_sector;
+			}
+			flashErase_handle.TypeErase=FLASH_TYPEERASE_SECTORS;
+			flashErase_handle.Sector=sector_number;
+			flashErase_handle.NbSectors=number_of_sector;
+		}
+		flashErase_handle.Banks=FLASH_BANK_1;
+
+		HAL_FLASH_Unlock();
+		flashErase_handle.VoltageRange=FLASH_VOLTAGE_RANGE_3;
+		status=(uint8_t)HAL_FLASHEx_Erase(&flashErase_handle, &sectorError);
+		HAL_FLASH_Lock();
+
+		return status;
+	}else{
+		return INVALID_SECTOR;
+	}
 }
 /* USER CODE END 4 */
 

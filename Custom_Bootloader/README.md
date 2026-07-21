@@ -23,7 +23,11 @@ Per-command details and captured host/target output for the custom bootloader pr
 
 ### FLASH_MASS_ERASE
 
+![output](../img/mass_erase.png)
+
 ### FLASH_ERASE
+
+![output](../img/flash_erase.png)
 
 ### MEM_WRITE
 
