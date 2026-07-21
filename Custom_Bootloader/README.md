@@ -27,7 +27,7 @@ Per-command details and captured host/target output for the custom bootloader pr
 
 ### FLASH_ERASE
 
-![output](../img/flash_erase.png)
+![output](../img/sector_erase.png)
 
 ### MEM_WRITE
 
